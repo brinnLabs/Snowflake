@@ -2,9 +2,8 @@
 
 #include "ofMain.h"
 #include "ofxUIUtils.h"
-#include "ofxSVG.h"
+#include "ofxSVGPlus.h"
 #include "ofxOpenCv.h"
-#include "ofxCvHoughLines.h"
 
 class ofApp : public ofBaseApp{
 
@@ -23,13 +22,15 @@ class ofApp : public ofBaseApp{
 		void mouseExited(int x, int y);
 		void windowResized(int w, int h);
 		void dragEvent(ofDragInfo dragInfo);
+
 		void drawVertex(float x, float y, float angle);
 		bool overCircle(int x, int y, int diameter);
 		void clearShape();
-		void drawShape();
-		void UIButPressed(const pair<bool, int>& state);
+		void drawShape(int width, int height, float multiplyer);
 		void addVertex(float x, float y, float angle);
 		void gotMessage(ofMessage msg);
+
+		void UIButPressed(const pair<bool, int>& state);
 		void UISliderMoved(const int & id);
 		void DropDown(const pair<string, int> & item);
 
@@ -43,32 +44,31 @@ class ofApp : public ofBaseApp{
 
 		int sides = 6;
 		bool ReflectMode = true;
+		int sidelen;
 
 		vector<float> xValues;
 		vector<float> yValues;
 		int SideLength;
-		ofColor circleColor, circleStroke, bgColor, symColor, segmentColor, emptyCircle;
+		ofColor circleColor, symColor;
 		int CircleDia;
-		int mtCircleDia;
 		bool dragging;
 		int MovePoint;
 		
-		ofxSVG dSvg;
+		ofxSVGPlus dSvg;
 		ofTrueTypeFont f;
 
 		SVG_FILL_RULE fR;
-		bool savedF, bSimplify;
+		bool savedF;
 
 		long fadetime;
 
-		ofxCvColorImage			colorImg;
+		ofxCvColorImage			colorImg, scolorImg;
 
-		ofxCvGrayscaleImage 	grayImage;
+		ofxCvGrayscaleImage 	grayImage, sgrayImage;
 
 		ofxCvContourFinder 	contourFinder;
 
-		ofFbo myFbo;
-		float threshold;
+		ofFbo myFbo, smFbo;
 
-		ofxCvHoughLines houghLines;
+		float multip;
 };

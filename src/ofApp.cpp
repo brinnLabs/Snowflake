@@ -4,9 +4,12 @@
 void ofApp::setup() {
 	ofBackground(70, 70, 200);
 	ofEnableSmoothing();
+	ofSetEscapeQuitsApp(false);
 
 	ofSetPolyMode(ofPolyWindingMode::OF_POLY_WINDING_NONZERO);
 	fR = SVG_FILL_RULE::NONZERO;
+
+	ofSetLogLevel(OF_LOG_VERBOSE);
 
 	dragging = false;
 	savedF = false;
@@ -18,63 +21,59 @@ void ofApp::setup() {
 	yValues.push_back(0);
 	yValues.push_back(0);
 
-	symColor = 0;
-	segmentColor = 255;
-	CircleDia = 10;
+	symColor.set(255, 255, 255, 176);
+	CircleDia = 15;
 	circleColor.set(255, 128, 0);
 
-	mtCircleDia = 10;
-	emptyCircle.set(255, 128, 0, 0);
-
-	SideLength = ofGetWidth() * 9 / 20;
+	sidelen = ofGetHeight() - 50;
+	SideLength = sidelen * 9 / 20;
 
 	clearShape();
 
-	circleStroke = 255;
 	ofSetLineWidth(1);
 
-	f.load(OF_TTF_SANS, 14);
+	f.load(OF_TTF_SANS, 24);
 
-	saveBut.setPosition(575, 600);
+	saveBut.setPosition(20, 700);
 	saveBut.setFont(f);
 	saveBut.setTitle("Save");
-	saveBut.setButtonStyle(UI_BUTTON_ROUNDED_RECT);
-	saveBut.setWidth(40);
+	saveBut.setButtonStyle(UI_BUTTON_RECT);
+	saveBut.setWidth(80);
 	saveBut.setID(1);
-	saveBut.setHeight(25);
+	saveBut.setHeight(40);
 
-	resetBut.setPosition(500, 600);
+	resetBut.setPosition(20, 600);
 	resetBut.setFont(f);
 	resetBut.setTitle("Clear");
-	resetBut.setButtonStyle(UI_BUTTON_ROUNDED_RECT);
-	resetBut.setWidth(40);
-	resetBut.setHeight(25);
+	resetBut.setButtonStyle(UI_BUTTON_RECT);
+	resetBut.setWidth(80);
+	resetBut.setHeight(40);
 	resetBut.setID(2);
 
-	sideSlider.setup(6, 3, 20, 30, 600);
+	sideSlider.setup(6, 3, 20, 20, 400);
 
 	windMenu.addMenuItem("Non-Zero Winding");
 	windMenu.addMenuItem("Even-Odd Winding");
 	windMenu.setButtonFont(f);
-	windMenu.setPosition(455, 30);
-	windMenu.setButtonColor(ofColor::beige);
-	windMenu.setButtonHoverColor(ofColor::sienna);
+	windMenu.setPosition(20, 20);
 	windMenu.setAutoSizing(true);
-	windMenu.setHeight(28);
+	windMenu.setHeight(35);
 
 	windMenu.setButtonTitle("Non-Zero Winding");
 
-	colorImg.allocate(640, 640);
-	grayImage.allocate(640, 640);
-	myFbo.allocate(640, 640, GL_RGB);
+	multip = 4;
+	colorImg.allocate(sidelen * multip, sidelen * multip);
+	grayImage.allocate(sidelen * multip, sidelen * multip);
+	myFbo.allocate(sidelen * multip, sidelen * multip, GL_RGB);
+
+	scolorImg.allocate(sidelen, sidelen);
+	sgrayImage.allocate(sidelen, sidelen);
+	smFbo.allocate(sidelen, sidelen, GL_RGB);
 
 	ofAddListener(resetBut.buttonEvent, this, &ofApp::UIButPressed);
 	ofAddListener(saveBut.buttonEvent, this, &ofApp::UIButPressed);
 	ofAddListener(sideSlider.sliderEvent, this, &ofApp::UISliderMoved);
 	ofAddListener(windMenu.menuEvent, this, &ofApp::DropDown);
-
-	threshold = 1.2;
-	bSimplify = false;
 }
 
 //--------------------------------------------------------------
@@ -117,46 +116,25 @@ void ofApp::update() {
 		}
 	}
 	if (fR == SVG_FILL_RULE::NONZERO) {
-		myFbo.begin();
+		smFbo.begin();
 		ofSetColor(0);
-		ofRect(0, 0, 640, 640);
+		ofRect(0, 0, smFbo.getWidth(), smFbo.getHeight());
 		ofSetColor(255);
-		ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
-		drawShape();
-		myFbo.end();
+		ofTranslate(smFbo.getWidth() / 2, smFbo.getHeight() / 2);
+		drawShape(smFbo.getWidth(), smFbo.getHeight(), 1);
+		smFbo.end();
 
 		ofPixels p;
-		p.allocate(640, 640, ofImageType::OF_IMAGE_COLOR);
-		myFbo.readToPixels(p);
-		colorImg.setFromPixels(p);
+		p.allocate(smFbo.getWidth(), smFbo.getHeight(), ofImageType::OF_IMAGE_COLOR);
+		smFbo.readToPixels(p);
+		scolorImg.setFromPixels(p);
 
-		grayImage = colorImg;
+		sgrayImage = scolorImg;
 
-		grayImage.threshold(80);
+		sgrayImage.threshold(80);
 
 
-		contourFinder.findContours(grayImage, 1, (640 * 640), 200, true);	// find holes
-
-		myFbo.begin();
-		ofSetColor(0);
-		ofRect(0, 0, 640, 640);
-		ofSetColor(255);
-		for (auto b : contourFinder.blobs) {
-			ofPolyline tempP;
-			tempP.addVertices(b.pts);
-			ofSetLineWidth(2);
-			tempP.draw();
-		}
-		myFbo.end();
-
-		myFbo.readToPixels(p);
-		colorImg.setFromPixels(p);
-
-		grayImage = colorImg;
-
-		grayImage.threshold(80);
-
-		houghLines.findHoughLines(grayImage);
+		contourFinder.findContours(sgrayImage, 1, (smFbo.getWidth() * smFbo.getHeight()), 200, true);	// find holes
 
 	}
 
@@ -169,16 +147,12 @@ void ofApp::draw() {
 	ofPushMatrix();
 	ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
 	ofSetLineWidth(1);
-	drawShape();
+	drawShape(sidelen, sidelen, 1);
 	ofPopMatrix();
-
-
-
-	symColor.set(255, 255, 255, 176);
-	segmentColor = symColor;
 
 	ofSetLineWidth(1);
 
+	ofPushStyle();
 	i = 0;
 	while (i < xValues.size())
 	{
@@ -186,7 +160,7 @@ void ofApp::draw() {
 
 			ofPushMatrix();
 			ofTranslate(ofGetWidth() / 2, ofGetHeight() / 2);
-			ofSetColor(circleColor.r, circleColor.g, circleColor.b, 255);
+			ofSetColor(circleColor);
 			ofEllipse(xValues[i], yValues[i], CircleDia, CircleDia);
 			ofPopMatrix();
 		}
@@ -203,6 +177,7 @@ void ofApp::draw() {
 		}
 		i++;
 	}
+	ofPopStyle();
 
 	ofPushStyle();
 	ofSetColor(ofColor::red);
@@ -212,24 +187,19 @@ void ofApp::draw() {
 		shapeL.draw();
 	}
 	else {
+		ofTranslate(ofGetWidth() / 2 - sidelen/2, ofGetHeight() / 2 - sidelen/2);
 		for (auto b : contourFinder.blobs) {
 			ofSetColor(ofColor::red);
 			ofPolyline tempP;
 			tempP.addVertices(b.pts);
 			tempP.draw();
-			/*ofSetColor(ofColor::aqua);
-			for (auto v : tempP.getVertices()) {
-				ofCircle(v, 2);
-			}*/
 		}
-		//houghLines.drawHoughLines(colorImg);
-		//colorImg.draw(0, 0);
 	}
 	ofPopMatrix();
 
 	if (savedF) {
 		ofSetColor(255, 100, 100, 255 - (ofGetElapsedTimeMillis() - fadetime) / 18);
-		f.drawString("Saved SVG", 520, 590);
+		f.drawString("Saved SVG", 30, 680);
 		if ((ofGetElapsedTimeMillis() - fadetime) / 1000.0 > 5)
 			savedF = false;
 	}
@@ -240,25 +210,14 @@ void ofApp::draw() {
 	windMenu.draw();
 
 	ofSetColor(symColor);
-	ofDrawBitmapString("Sides: " + ofToString(sides), 30, 590);
+	ofDrawBitmapString("Sides: " + ofToString(sides), 20, 390);
 	sideSlider.draw();
 	ofPopStyle();
 }
 
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key) {
-	switch (key) {
-	case '1':
-		threshold += .1;
-		cout << threshold << endl;
-		break;
-	case '2':
-		threshold -= .1;
-		cout << threshold << endl;
-		break;
-	default:
-		break;
-	}
+
 }
 
 //--------------------------------------------------------------
@@ -277,52 +236,11 @@ void ofApp::mouseDragged(int x, int y, int button) {
 	float xf, yf;
 	if (dragging)
 	{
-		if (MovePoint == 0)
-		{
-			xt = ofGetWidth() / 2;
+		xValues[MovePoint] = mouseX - ofGetWidth() / 2;
+		yValues[MovePoint] = mouseY - ofGetHeight() / 2;
+		xt = mouseX;
+		yt = mouseY;
 
-			if (y < ofGetHeight() / 2)
-			{
-				yValues[MovePoint] = y - ofGetHeight() / 2;
-				yt = y;
-			}
-			else
-			{
-				yValues[MovePoint] = 0;
-				yt = ofGetHeight() / 2;
-			}
-
-
-		}
-		else if (MovePoint == xValues.size() - 1)    // Last point in array.
-		{
-
-			xf = mouseX - ofGetWidth() / 2;
-			yf = mouseY - ofGetHeight() / 2;
-
-			xf = -yf / sqrt(3);
-
-			if (yf > 0)
-			{
-				xf = 0;
-				yf = 0;
-			}
-
-			xValues[MovePoint] = (int)xf;
-			yValues[MovePoint] = (int)yf;
-
-			xt = (int)(ofGetWidth() / 2 + xf);
-			yt = (int)(ofGetHeight() / 2 + yf);
-
-		}
-		else
-		{
-			xValues[MovePoint] = mouseX - ofGetWidth() / 2;
-			yValues[MovePoint] = mouseY - ofGetHeight() / 2;
-			xt = mouseX;
-			yt = mouseY;
-
-		}
 	}
 }
 
@@ -387,7 +305,6 @@ void ofApp::mouseExited(int x, int y) {
 
 //--------------------------------------------------------------
 void ofApp::windowResized(int w, int h) {
-
 }
 
 //--------------------------------------------------------------
@@ -432,15 +349,18 @@ void ofApp::clearShape() {
 	yValues.push_back(0);
 
 	xValues[0] = 0;
-	xValues[1] = SideLength*sqrt(3) / 4;
+	xValues[1] = SideLength*sqrt(3) / 4; //hexagon
+	//xValues[1] = SideLength*sqrt(2) / 4; //pentagon
+	//xValues[1] = SideLength*1 / 4;
 
 	yValues[0] = -SideLength;
 	yValues[1] = -0.75*SideLength;
+	//yValues[1] = -0.25*SideLength;
 }
 
 
 
-void ofApp::drawShape()
+void ofApp::drawShape(int width, int height, float multiplyer)
 {
 
 	float angle;
@@ -459,7 +379,7 @@ void ofApp::drawShape()
 			j = 0;
 			while (j < xValues.size())
 			{
-				drawVertex(-1 * xValues[j], yValues[j], angle);
+				drawVertex(-1 * xValues[j] * multiplyer, yValues[j] * multiplyer, angle);
 				j++;
 			}
 
@@ -470,7 +390,7 @@ void ofApp::drawShape()
 
 			while (j < xValues.size())
 			{
-				drawVertex(xValues[j], yValues[j], angle);
+				drawVertex(xValues[j] * multiplyer, yValues[j] * multiplyer, angle);
 				j++;
 			}
 			i++;
@@ -479,7 +399,7 @@ void ofApp::drawShape()
 			j = 0;
 			while (j < xValues.size())
 			{
-				drawVertex(xValues[j], yValues[j], angle);
+				drawVertex(xValues[j] * multiplyer, yValues[j] * multiplyer, angle);
 				j++;
 			}
 			i++;
@@ -498,14 +418,11 @@ void ofApp::UIButPressed(const pair<bool, int> & state) {
 	}
 	if (state.second == saveBut.getID() && state.first == false) {
 
-		ofxSVG _svg;
-		_svg.noStroke();
+		ofxSVGPlus _svg;
 		_svg.pushGroup();
-		_svg.fillRule(fR);
-		_svg.fill("#4646C8");
-		_svg.rect(0, 0, ofGetWidth(), ofGetHeight());
-		_svg.stroke("#B2ACB7", 1);
-		_svg.fill("#BACDE8");
+		//_svg.fillRule(fR);
+		_svg.fill("none");
+		_svg.stroke("#000000", 1);
 		if (fR == SVG_FILL_RULE::EVEN_ODD) {
 			_svg.beginPolygon();
 			float hx = ofGetWidth() / 2.0;
@@ -515,66 +432,32 @@ void ofApp::UIButPressed(const pair<bool, int> & state) {
 			_svg.endPolygon();
 		}
 		else {
-			//for (auto b : contourFinder.blobs) {
-			//	ofPolyline tempP;
-			//	tempP.addVertices(b.pts);
-			//	if (bSimplify)
-			//		tempP.simplify(threshold);
-			//	if (b.hole)
-			//		_svg.fill("#4646C8");
-			//	else
-			//		_svg.fill("#BACDE8");
-			//	_svg.beginPolyline();
-			//	ofPoint p0, p1, p2, p3; // we need to first point and then to be able to compare two points
-			//	bool first, fd;
-			//	float ang;
-			//	int count = 0;
-			//	first = fd = true;
-			//	vector<float> angles;
-			//	for (auto v : tempP.getVertices()) {
-			//		count++;
-			//		if (first) {
-			//			p2 = p1 = p0 = v;
-			//			first = false;
-			//			_svg.vertex(v.x, v.y);
-			//		}
-			//		else {
-			//			p3 = v;
-			//			if (fd) {
-			//				ang = angleOfLine(p1, p3);
-			//				fd = false;
-			//			}
-			//			else {
-			//				/*if (ang != angleOfLine(p1, p3))
-			//					pnts.push_back(p2);*/
-			//				if (ang != angleOfLine(p1, p3)) { //the angle has moved lets get the new angle
-			//					_svg.vertex(p2.x, p2.y); //this was the previous point
-			//					p1 = p2; //set the new corner point
-			//					ang = angleOfLine(p1, p3); //whats the new angle
-			//					p2 = p3;
-			//				}
-			//				else { //the angle is the same move on to the next point
-			//					p2 = p3;
-			//				}
-			//			}
-			//		}
-			//	}
-			//	_svg.vertex(p0.x, p0.y);
-			//	_svg.endPolyline();
-			//}
+			myFbo.begin();
+			ofSetColor(0);
+			ofRect(0, 0, myFbo.getWidth(), myFbo.getHeight());
+			ofSetColor(255);
+			ofTranslate(myFbo.getWidth() / 2, myFbo.getHeight() / 2);
+			drawShape(myFbo.getWidth(), myFbo.getHeight(), multip);
+			myFbo.end();
+
+			ofPixels p;
+			p.allocate(myFbo.getWidth(), myFbo.getHeight(), ofImageType::OF_IMAGE_COLOR);
+			myFbo.readToPixels(p);
+			colorImg.setFromPixels(p);
+
+			grayImage = colorImg;
+
+			grayImage.threshold(80);
+
+			contourFinder.findContours(grayImage, 1, (myFbo.getWidth() * myFbo.getHeight()), 200, true);	// find holes
+
 			for (auto b : contourFinder.blobs) {
 				ofPolyline tempP;
 				tempP.addVertices(b.pts);
-				/*if (bSimplify)
-					tempP.simplify(threshold);*/
-				if (b.hole)
-					_svg.fill("#4646C8");
-				else
-					_svg.fill("#BACDE8");
-				_svg.beginPolyline();
+				_svg.beginPolygon();
 				for (auto v : tempP.getVertices())
 					_svg.vertex(v.x, v.y);
-				_svg.endPolyline();
+				_svg.endPolygon();
 			}
 		}
 		string path = ofGetTimestampString("%m-%d");
